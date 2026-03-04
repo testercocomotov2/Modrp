@@ -93,26 +93,27 @@ jobs:
           keytool -genkey -v -keystore sgyt-release.keystore -alias sgyt_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass "master_sgyt" -keypass "master_sgyt" -dname "CN=SGYT, OU=Modder, O=SGYT, L=Agra, S=UP, C=IN"
           apksigner sign --ks sgyt-release.keystore --ks-pass pass:master_sgyt --out FINAL_MODDED_GAME.apk modded_aligned.apk
 
-      - name: 10. Upload to Buzzheavier
+      - name: 10. Upload to Pixeldrain
         run: |
-          echo "[+] Uploading FINAL_MODDED_GAME.apk to Buzzheavier for Master SGYT..."
+          echo "[+] Uploading FINAL_MODDED_GAME.apk to Pixeldrain for Master SGYT..."
           
-          # Push the file to Buzzheavier's upload API
-          RESPONSE=$(curl -s -T FINAL_MODDED_GAME.apk "https://w.buzzheavier.com/SGYT_Modded_Game.apk")
+          # Push the file to Pixeldrain's upload API
+          RESPONSE=$(curl -s -T FINAL_MODDED_GAME.apk "https://pixeldrain.com/api/file/SGYT_Modded_Game.apk")
           echo "$RESPONSE" > response.json
           
-          # Extract the new File ID from the JSON
-          FILE_ID=$(jq -r '.data.id // empty' response.json)
+          # Extract the success status and new File ID from the JSON
+          SUCCESS=$(jq -r '.success // empty' response.json)
+          FILE_ID=$(jq -r '.id // empty' response.json)
           
-          if [ -n "$FILE_ID" ]; then
-              DOWNLOAD_LINK="https://buzzheavier.com/$FILE_ID"
+          if [ "$SUCCESS" = "true" ] && [ -n "$FILE_ID" ]; then
+              DOWNLOAD_LINK="https://pixeldrain.com/u/$FILE_ID"
               echo "======================================================="
               echo " [SUCCESS] MASTER SGYT'S GAME IS READY!"
-              echo " Buzzheavier Link: $DOWNLOAD_LINK"
+              echo " Pixeldrain Link: $DOWNLOAD_LINK"
               echo "======================================================="
           else
               echo "======================================================="
-              echo " [?] UPLOAD FINISHED, BUT ID PARSING FAILED."
+              echo " [?] UPLOAD FAILED OR ID PARSING ERROR."
               echo " Raw Response: $RESPONSE"
               echo "======================================================="
           fi
