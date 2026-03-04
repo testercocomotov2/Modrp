@@ -1,4 +1,4 @@
-name: SGYT Supreme Ren'Py Modder
+name: SGYT Supreme Omni-Modder
 
 on:
   workflow_dispatch:
@@ -31,57 +31,88 @@ jobs:
         run: |
           wget -qO APKEditor.jar https://github.com/REAndroid/APKEditor/releases/download/V1.4.7/APKEditor-1.4.7.jar
 
-      - name: 5. Smart Download & Verify Target Game APK
+      - name: 5. Smart Download APK
         run: |
           RAW_URL="${{ github.event.inputs.apk_url }}"
-          
-          # Automatically convert ANY Pixeldrain link to a direct API download
           if [[ "$RAW_URL" == *"pixeldrain."*"/u/"* ]]; then
               DIRECT_URL="${RAW_URL/\/u\//\/api\/file\/}"
-              echo "[+] Master SGYT provided a Pixeldrain link. Converting:"
-              echo "[+] $DIRECT_URL"
           else
               DIRECT_URL="$RAW_URL"
           fi
-          
-          echo "[+] Fetching the APK..."
           wget -O target_game.apk "$DIRECT_URL"
-          
-          echo "[+] Download complete. Verifying file integrity..."
-          FILESIZE=$(stat -c%s "target_game.apk")
-          if [ $FILESIZE -lt 10000000 ]; then
-            echo "[-] ERROR: The downloaded file is only $FILESIZE bytes!"
-            echo "[-] The host blocked the download. Please ensure the link is correct."
-            exit 1
-          fi
-          echo "[+] SUCCESS: APK verified. Proceeding with Master's modifications."
 
       - name: 6. Decompile APK
         run: |
           java -jar APKEditor.jar d -i target_game.apk -o extracted_apk
 
-      - name: 7. Inject Dev Console Mod Directly
+      - name: 7. Master SGYT Omni-Mod Injection
         run: |
-          mkdir -p extracted_apk/assets/game
-          cat << 'EOF' > extracted_apk/assets/game/999_sgyt_console_mod.rpy
-          init 999 python:
+          # Locate the actual game directory
+          GAME_PATH=$(find extracted_apk -name "options.rpyc" -exec dirname {} \;)
+          if [ -z "$GAME_PATH" ]; then
+            GAME_PATH=$(find extracted_apk -name "script.rpyc" -exec dirname {} \;)
+          fi
+          if [ -z "$GAME_PATH" ]; then
+            GAME_PATH="extracted_apk/assets/game"
+          fi
+          
+          mkdir -p "$GAME_PATH"
+
+          cat << 'EOF' > "$GAME_PATH/999_sgyt_master_mod.rpy"
+          init -999 python:
+              # Force unlock the developer engine
               config.developer = True
               config.console = True
+              
+              # Force hardware keyboard shortcuts for Master SGYT
+              if 'console' in config.keymap:
+                  config.keymap['console'].append('shift_K_o')
+                  config.keymap['console'].append('K_F1')
+              else:
+                  config.keymap['console'] = ['shift_K_o', 'K_F1']
 
-          screen mobile_console_btn():
-              zorder 100
-              textbutton "DEV CONSOLE":
-                  action Show("_console")
-                  xalign 1.0
-                  yalign 0.0
-                  text_size 30
-                  text_color "#00ff00"
-                  text_outlines [ (2, "#000000", 0, 0) ]
+          screen sgyt_console_trigger():
+              zorder 2000
+              drag:
+                  draggable True
+                  xpos 0.8
+                  ypos 0.1
+                  frame:
+                      background Solid("#000000AA")
+                      padding (15, 15)
+                      vbox:
+                          spacing 10
+                          # The Touch Console Button
+                          textbutton "SGYT CONSOLE":
+                              action Show("_console")
+                              text_size 35
+                              text_color "#00FF00"
+                              text_hover_color "#FFFFFF"
+                          
+                          # The Auto-Wealth Cheat Button
+                          textbutton "QUICK WEALTH":
+                              action Function(sgyt_inject_wealth)
+                              text_size 25
+                              text_color "#FFD700"
+                              text_hover_color "#FFFFFF"
 
-          init python:
-              config.overlay_screens.append("mobile_console_btn")
+          init 999 python:
+              def sgyt_inject_wealth():
+                  # Scans the game's variables and maxes out the currency
+                  currencies = ['money', 'gold', 'cash', 'coins', 'credits', 'wealth', 'ryo', 'yen', 'dollars']
+                  for var in currencies:
+                      if hasattr(store, var):
+                          if isinstance(getattr(store, var), int):
+                              setattr(store, var, getattr(store, var) + 99999)
+                  renpy.notify("Master SGYT's Wealth Injected!")
+
+              def sgyt_force_show():
+                  if not renpy.get_screen("sgyt_console_trigger"):
+                      renpy.show_screen("sgyt_console_trigger")
+              
+              config.overlay_functions.append(sgyt_force_show)
           EOF
-          echo "[+] SGYT Mod injected successfully."
+          echo "[+] Master's Omni-Mod injected into $GAME_PATH"
 
       - name: 8. Recompile APK
         run: |
@@ -95,37 +126,20 @@ jobs:
 
       - name: 10. Authenticated Upload to Pixeldrain
         run: |
-          echo "[+] Uploading FINAL_MODDED_GAME.apk to Pixeldrain for Master SGYT..."
-          
-          if [ -z "${{ secrets.PIXELDRAIN_API_KEY }}" ]; then
-              echo "[-] ERROR: API Key is missing! Master, please add PIXELDRAIN_API_KEY to your GitHub Secrets."
-              exit 1
-          fi
-          
-          # Push the file to Pixeldrain's upload API using Basic Authentication
           RESPONSE=$(curl -s -T FINAL_MODDED_GAME.apk -u ":${{ secrets.PIXELDRAIN_API_KEY }}" "https://pixeldrain.com/api/file/SGYT_Modded_Game.apk")
-          echo "$RESPONSE" > response.json
-          
-          # Extract the success status and new File ID from the JSON
-          SUCCESS=$(jq -r '.success // empty' response.json)
-          FILE_ID=$(jq -r '.id // empty' response.json)
-          
-          if [ "$SUCCESS" = "true" ] && [ -n "$FILE_ID" ]; then
-              DOWNLOAD_LINK="https://pixeldrain.com/u/$FILE_ID"
+          FILE_ID=$(echo "$RESPONSE" | jq -r '.id // empty')
+          if [ -n "$FILE_ID" ] && [ "$FILE_ID" != "null" ]; then
               echo "======================================================="
-              echo " [SUCCESS] MASTER SGYT'S GAME IS READY!"
-              echo " Pixeldrain Link: $DOWNLOAD_LINK"
+              echo " [SUCCESS] MASTER SGYT'S OMNI-MOD IS READY!"
+              echo " Pixeldrain Link: https://pixeldrain.com/u/$FILE_ID"
               echo "======================================================="
           else
-              echo "======================================================="
-              echo " [?] UPLOAD FAILED."
-              echo " Raw Response: $RESPONSE"
-              echo "======================================================="
+              echo "Upload failed. Response: $RESPONSE"
               exit 1
           fi
 
-      - name: 11. Upload GitHub Artifact (Failsafe Backup)
+      - name: 11. Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SGYT_Modded_Game
+          name: SGYT_Modded_Game_Omni
           path: FINAL_MODDED_GAME.apk
