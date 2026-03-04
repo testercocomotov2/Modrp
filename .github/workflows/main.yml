@@ -93,12 +93,17 @@ jobs:
           keytool -genkey -v -keystore sgyt-release.keystore -alias sgyt_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass "master_sgyt" -keypass "master_sgyt" -dname "CN=SGYT, OU=Modder, O=SGYT, L=Agra, S=UP, C=IN"
           apksigner sign --ks sgyt-release.keystore --ks-pass pass:master_sgyt --out FINAL_MODDED_GAME.apk modded_aligned.apk
 
-      - name: 10. Upload to Pixeldrain
+      - name: 10. Authenticated Upload to Pixeldrain
         run: |
           echo "[+] Uploading FINAL_MODDED_GAME.apk to Pixeldrain for Master SGYT..."
           
-          # Push the file to Pixeldrain's upload API
-          RESPONSE=$(curl -s -T FINAL_MODDED_GAME.apk "https://pixeldrain.com/api/file/SGYT_Modded_Game.apk")
+          if [ -z "${{ secrets.PIXELDRAIN_API_KEY }}" ]; then
+              echo "[-] ERROR: API Key is missing! Master, please add PIXELDRAIN_API_KEY to your GitHub Secrets."
+              exit 1
+          fi
+          
+          # Push the file to Pixeldrain's upload API using Basic Authentication
+          RESPONSE=$(curl -s -T FINAL_MODDED_GAME.apk -u ":${{ secrets.PIXELDRAIN_API_KEY }}" "https://pixeldrain.com/api/file/SGYT_Modded_Game.apk")
           echo "$RESPONSE" > response.json
           
           # Extract the success status and new File ID from the JSON
@@ -113,9 +118,10 @@ jobs:
               echo "======================================================="
           else
               echo "======================================================="
-              echo " [?] UPLOAD FAILED OR ID PARSING ERROR."
+              echo " [?] UPLOAD FAILED."
               echo " Raw Response: $RESPONSE"
               echo "======================================================="
+              exit 1
           fi
 
       - name: 11. Upload GitHub Artifact (Failsafe Backup)
