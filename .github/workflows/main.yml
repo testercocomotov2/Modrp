@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       apk_url:
-        description: 'Pixeldrain Link (e.g., https://pixeldrain.dev/u/...) or direct APK URL'
+        description: 'Pixeldrain Link or Direct APK URL'
         required: true
         default: 'https://pixeldrain.dev/u/1xznptdr'
 
@@ -22,12 +22,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 3. Install Android Build Tools
+      - name: 3. Install Android Build Tools & JSON Parser
         run: |
           sudo apt-get update
-          sudo apt-get install -y zipalign apksigner
+          sudo apt-get install -y zipalign apksigner jq
 
-      - name: 4. Download APKEditor CLI (Apktool Alternative)
+      - name: 4. Download APKEditor CLI
         run: |
           wget -qO APKEditor.jar https://github.com/REAndroid/APKEditor/releases/download/V1.4.7/APKEditor-1.4.7.jar
 
@@ -35,10 +35,10 @@ jobs:
         run: |
           RAW_URL="${{ github.event.inputs.apk_url }}"
           
-          # Automatically convert ANY Pixeldrain link (.com, .dev, .net) to direct API download
+          # Automatically convert ANY Pixeldrain link to a direct API download
           if [[ "$RAW_URL" == *"pixeldrain."*"/u/"* ]]; then
               DIRECT_URL="${RAW_URL/\/u\//\/api\/file\/}"
-              echo "[+] Master SGYT provided a Pixeldrain link. Converting to direct API link:"
+              echo "[+] Master SGYT provided a Pixeldrain link. Converting:"
               echo "[+] $DIRECT_URL"
           else
               DIRECT_URL="$RAW_URL"
@@ -93,7 +93,31 @@ jobs:
           keytool -genkey -v -keystore sgyt-release.keystore -alias sgyt_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass "master_sgyt" -keypass "master_sgyt" -dname "CN=SGYT, OU=Modder, O=SGYT, L=Agra, S=UP, C=IN"
           apksigner sign --ks sgyt-release.keystore --ks-pass pass:master_sgyt --out FINAL_MODDED_GAME.apk modded_aligned.apk
 
-      - name: 10. Upload Final Installable Game
+      - name: 10. Upload to Buzzheavier
+        run: |
+          echo "[+] Uploading FINAL_MODDED_GAME.apk to Buzzheavier for Master SGYT..."
+          
+          # Push the file to Buzzheavier's upload API
+          RESPONSE=$(curl -s -T FINAL_MODDED_GAME.apk "https://w.buzzheavier.com/SGYT_Modded_Game.apk")
+          echo "$RESPONSE" > response.json
+          
+          # Extract the new File ID from the JSON
+          FILE_ID=$(jq -r '.data.id // empty' response.json)
+          
+          if [ -n "$FILE_ID" ]; then
+              DOWNLOAD_LINK="https://buzzheavier.com/$FILE_ID"
+              echo "======================================================="
+              echo " [SUCCESS] MASTER SGYT'S GAME IS READY!"
+              echo " Buzzheavier Link: $DOWNLOAD_LINK"
+              echo "======================================================="
+          else
+              echo "======================================================="
+              echo " [?] UPLOAD FINISHED, BUT ID PARSING FAILED."
+              echo " Raw Response: $RESPONSE"
+              echo "======================================================="
+          fi
+
+      - name: 11. Upload GitHub Artifact (Failsafe Backup)
         uses: actions/upload-artifact@v4
         with:
           name: SGYT_Modded_Game
