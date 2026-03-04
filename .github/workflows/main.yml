@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       apk_url:
-        description: 'Direct URL to the APK'
+        description: 'Pixeldrain Link (e.g., https://pixeldrain.dev/u/...) or direct APK URL'
         required: true
-        default: 'https://file-eu-par-4.gofile.io/download/web/a7d7809a-20fc-490a-a882-41d058f56946/House_of_Shinobi_v0.23e.apk'
+        default: 'https://pixeldrain.dev/u/1xznptdr'
 
 jobs:
   build-mod:
@@ -31,9 +31,30 @@ jobs:
         run: |
           wget -qO APKEditor.jar https://github.com/REAndroid/APKEditor/releases/download/V1.4.7/APKEditor-1.4.7.jar
 
-      - name: 5. Download Target Game APK
+      - name: 5. Smart Download & Verify Target Game APK
         run: |
-          wget -O target_game.apk "${{ github.event.inputs.apk_url }}"
+          RAW_URL="${{ github.event.inputs.apk_url }}"
+          
+          # Automatically convert ANY Pixeldrain link (.com, .dev, .net) to direct API download
+          if [[ "$RAW_URL" == *"pixeldrain."*"/u/"* ]]; then
+              DIRECT_URL="${RAW_URL/\/u\//\/api\/file\/}"
+              echo "[+] Master SGYT provided a Pixeldrain link. Converting to direct API link:"
+              echo "[+] $DIRECT_URL"
+          else
+              DIRECT_URL="$RAW_URL"
+          fi
+          
+          echo "[+] Fetching the APK..."
+          wget -O target_game.apk "$DIRECT_URL"
+          
+          echo "[+] Download complete. Verifying file integrity..."
+          FILESIZE=$(stat -c%s "target_game.apk")
+          if [ $FILESIZE -lt 10000000 ]; then
+            echo "[-] ERROR: The downloaded file is only $FILESIZE bytes!"
+            echo "[-] The host blocked the download. Please ensure the link is correct."
+            exit 1
+          fi
+          echo "[+] SUCCESS: APK verified. Proceeding with Master's modifications."
 
       - name: 6. Decompile APK
         run: |
@@ -75,5 +96,5 @@ jobs:
       - name: 10. Upload Final Installable Game
         uses: actions/upload-artifact@v4
         with:
-          name: House_of_Shinobi_SGYT_Modded
+          name: SGYT_Modded_Game
           path: FINAL_MODDED_GAME.apk
